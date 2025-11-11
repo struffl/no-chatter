@@ -1,0 +1,25 @@
+name: CI/CD
+
+on:
+    push:
+        branches: ["main"]
+
+jobs:
+    build-and-push:
+        runs-on: linux-arm64
+        permissions:
+            contents: write
+            packages: read
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v5
+
+            - name: Build Deno binary
+              run: /home/runner/.deno/bin/deno task prepare
+
+            - name: Install Deno binary
+              run: sudo cp -f no-chatter /usr/local/bin/no-chatter
+
+            - name: Deploy Deno binary
+              run: sudo systemctl --user -M heni@ restart no-chatter
