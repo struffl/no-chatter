@@ -542,11 +542,11 @@ async function incomingMessageCreateHandler(message: Message) {
     if (!message.guild) return;
     // If the incoming message is in the incinerator
     if (await shouldIncinerate(message)) {
-        // Ban the user and delete the last 7 days of messages
+        // Ban the user and delete the last 1 hour of messages
         try {
             await message.guild.members.ban(message.author, {
                 reason: "Posted spam in incinerator",
-                deleteMessageSeconds: 604800,
+                deleteMessageSeconds: 3600,
             });
             logger.info(
                 `Banned user ${message.author.displayName} (${message.author.username}) for spam.`,

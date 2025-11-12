@@ -22,10 +22,10 @@ sight.
   continue the conversation.
 - **Optional anti-spam "Incinerator"**: When a message is detected in a channel
   within `incinerator.json` the user posting that message is instantly banned
-  and their messages in the past seven days deleted. It's highly suggested to
-  warn your users if enabling this optional feature. The intent is to catch
-  spammers in their tracks as their self-bot scripts don't read channel contents
-  before posting.
+  and their messages in the past one hour deleted. It's highly suggested to warn
+  your users if enabling this optional feature. The intent is to catch spammers
+  in their tracks as their self-bot scripts don't read channel contents before
+  posting.
 
 ## Prerequisites
 
