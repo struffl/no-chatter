@@ -67,20 +67,22 @@ const pluralKitClient = new PKAPI({
 
 // --- CONFIG STORE ---
 let mediaChannelIds: string[] = [];
+let incineratorChannels: string[] = [];
+
+function isProperChannel(
+    channel?: Channel | null,
+): channel is TextChannel {
+    return channel instanceof TextChannel;
+}
 
 /**
  * Loads channels from channels.json in the present working directory, or initializes the file if not present and exits
  */
-async function loadChannels() {
+async function loadNoChatterChannels() {
     try {
         const fileContent = await Deno.readTextFile("./channels.json");
         mediaChannelIds = JSON.parse(fileContent);
 
-        function isProperChannel(
-            channel?: Channel | null,
-        ): channel is TextChannel {
-            return channel instanceof TextChannel;
-        }
         const mediaChannelsWithNames =
             (await Promise.all(mediaChannelIds.map(async (channelId) => {
                 try {
@@ -106,12 +108,51 @@ async function loadChannels() {
         );
     } catch (error) {
         if (error instanceof Deno.errors.NotFound) {
-            logger.warn(
-                "channels.json not found. Creating an empty one. Please add channel IDs.",
+            logger.log(
+                "channels.json not found. Skipping feature.",
             );
-            await Deno.writeTextFile("./channels.json", "[]");
         } else {
             logger.error("Failed to load or parse channels.json:", error);
+            Deno.exit(1);
+        }
+    }
+}
+
+async function loadIncineratorChannels() {
+    try {
+        const fileContent = await Deno.readTextFile("./incinerator.json");
+        incineratorChannels = JSON.parse(fileContent);
+
+        const incineratorChannelsWithNames =
+            (await Promise.all(incineratorChannels.map(async (channelId) => {
+                try {
+                    const channel = await client.channels.fetch(channelId);
+                    if (channel instanceof TextChannel) {
+                        return channel;
+                    } else {
+                        logger.error(
+                            "Provided channel was not a text channel...",
+                            channel,
+                        );
+                    }
+                } catch (error) {
+                    logger.error("Error fetching some channel...", error);
+                    return null;
+                }
+            }))).filter(isProperChannel).map((channel) => {
+                return { name: channel.name, id: channel.id };
+            });
+        logger.log(
+            "Successfully loaded the following incinerator channels:",
+            incineratorChannelsWithNames,
+        );
+    } catch (error) {
+        if (error instanceof Deno.errors.NotFound) {
+            logger.log(
+                "incinerator.json not found. Skipping feature.",
+            );
+        } else {
+            logger.error("Failed to load or parse incinerator.json:", error);
             Deno.exit(1);
         }
     }
@@ -125,6 +166,14 @@ async function loadChannels() {
 const someLinkRegex = new RegExp(
     /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_.~+#?&//=]*)/i,
 );
+
+/**
+ * Checks if this is a post in one of the incinerator channels
+ */
+async function shouldIncinerate(message: Message): Promise<Boolean> {
+    // Only parse channels in configuration
+    return incineratorChannels.includes(message.channel.id);
+}
 
 /**
  * Checks a number of candidacy tests to determine if a message is or isn't valid within a "media-only" channel.
@@ -478,10 +527,38 @@ setInterval(async () => {
 // --- EVENT HANDLERS ---
 client.once(Events.ClientReady, async (readyClient) => {
     logger.info(`Ready! Logged in as ${readyClient.user.displayName}`);
-    await loadChannels();
+    await loadNoChatterChannels();
+    await loadIncineratorChannels();
+    if (mediaChannelIds.length == 0 && incineratorChannels.length == 0) {
+        logger.error(
+            `No channels found for either media-only or incinerator. Exiting as the bot would otherwise do nothing!`,
+        );
+        Deno.exit(1);
+    }
 });
 
 async function incomingMessageCreateHandler(message: Message) {
+    // Only function in guilds
+    if (!message.guild) return;
+    // If the incoming message is in the incinerator
+    if (await shouldIncinerate(message)) {
+        // Ban the user and delete the last 7 days of messages
+        try {
+            await message.guild.members.ban(message.author, {
+                reason: "Posted spam in incinerator",
+                deleteMessageSeconds: 604800,
+            });
+            logger.info(
+                `Banned user ${message.author.displayName} (${message.author.username}) for spam.`,
+            );
+        } catch (error) {
+            console.error(error);
+            logger.error(
+                `Failed to ban user ${message.author.displayName} (${message.author.username}) for spam!`,
+            );
+        }
+        return;
+    }
     // If the incoming message is our own thread creation message, clean it up to be tidy
     if (
         message.type == MessageType.ThreadCreated &&

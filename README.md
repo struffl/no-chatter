@@ -5,6 +5,10 @@ media-only channels pristine. It intelligently detects text-only messages in
 designated channels and automatically moves them into organized discussion
 threads, ensuring your media remains the star of the show.
 
+It can also perform anti-spam tasks with an "incinerator" channel to bait
+self-bot scripts into posting into a channel that bans anyone who posts there on
+sight.
+
 ## Features
 
 - **Automatic Thread Creation**: No Chatter automatically creates a new thread
@@ -16,6 +20,12 @@ threads, ensuring your media remains the star of the show.
 - **User-Friendly Notifications**: When a message is moved, the bot sends a
   direct message to the user, letting them know where to find their message and
   continue the conversation.
+- **Optional anti-spam "Incinerator"**: When a message is detected in a channel
+  within `incinerator.json` the user posting that message is instantly banned
+  and their messages in the past seven days deleted. It's highly suggested to
+  warn your users if enabling this optional feature. The intent is to catch
+  spammers in their tracks as their self-bot scripts don't read channel contents
+  before posting.
 
 ## Prerequisites
 
@@ -24,22 +34,34 @@ threads, ensuring your media remains the star of the show.
   - `Guilds`
   - `GuildMessages`
   - `MessageContent`
+- The following permissions for the bot assigned as needed:
+  - Create Public Threads
+  - Create Private Threads
+  - Manage Channels
+  - Manage Messages
+  - Moderate Members
+  - Ban Members
+
+Note: which permissions are necessary depend on which features you choose to
+use.
 
 ## Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/aronson/no-chatter.git
+   git clone https://git.glomp.ai/heni/no-chatter.git
    cd no-chatter
    ```
 
 ## Configuration
 
-Before running the bot, you need to configure it by setting up environment variables and specifying the channels to monitor.
+Before running the bot, you need to configure it by setting up environment
+variables and specifying the channels to monitor.
 
 ### 1. Environment Variables
 
-Create a `.env` file in the root of the project. This file is used to store sensitive information like API tokens.
+Create a `.env` file in the root of the project. This file is used to store
+sensitive information like API tokens.
 
 ```
 BOT_TOKEN=your_bot_token_here
@@ -47,13 +69,28 @@ PK_TOKEN=your_pluralkit_token_here
 LOG_LEVEL=info
 ```
 
--   `BOT_TOKEN` (required): Your Discord bot token.
--   `PK_TOKEN` (optional): Your PluralKit token. This is recommended to avoid rate limits when interacting with the PluralKit API.
--   `LOG_LEVEL` (optional): Sets the logging verbosity. Can be one of `trace`, `debug`, `info`, `warn`, `error`, or `fatal`. Defaults to `info`.
+- `BOT_TOKEN` (required): Your Discord bot token.
+- `PK_TOKEN` (optional): Your PluralKit token. This is recommended to avoid rate
+  limits when interacting with the PluralKit API.
+- `LOG_LEVEL` (optional): Sets the logging verbosity. Can be one of `trace`,
+  `debug`, `info`, `warn`, `error`, or `fatal`. Defaults to `info`.
 
-### 2. Channel Configuration
+### 2. Media-only channel Configuration (optional)
 
-Create a `channels.json` file in the root of the project. Add the IDs of the text channels you want the bot to monitor for media-only content.
+Create a `channels.json` file in the root of the project. Add the IDs of the
+text channels you want the bot to monitor for media-only content.
+
+```json
+[
+    "channel_id_1",
+    "channel_id_2"
+]
+```
+
+### 3. Incinerator Configuration (optional)
+
+Create an `incinerator.json` file in the root of the project. Add the IDs of the
+text channels you want the bot to monitor for anti-spam purposes.
 
 ```json
 [
@@ -93,5 +130,5 @@ please open an issue or submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE.md)
-file for details.
+This project is licensed under the AGPL-3.0 License. See the
+[LICENSE](LICENSE.md) file for details.
