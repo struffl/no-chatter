@@ -4,7 +4,7 @@
     },
     "tasks": {
         "start": "deno run -A main.ts",
-        "prepare": "deno compile --allow-net --allow-env --allow-read=./.env.example --allow-read=./.env.defaults --allow-read=./.env --allow-read=./channels.json --allow-write=./channels.json --output no-chatter main.ts"
+        "prepare": "deno compile --allow-net --allow-env --allow-read=./incinerator.json --allow-read=./.env.example --allow-read=./.env.defaults --allow-read=./.env --allow-read=./channels.json --allow-write=./channels.json --output no-chatter main.ts"
     },
     "imports": {
         "discord.js": "npm:discord.js@14",
