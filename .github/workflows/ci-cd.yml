@@ -22,4 +22,4 @@ jobs:
               run: sudo cp -f no-chatter /usr/local/bin/no-chatter
 
             - name: Deploy Deno binary
-              run: sudo systemctl --user -M heni@ restart no-chatter
+              run: sudo systemctl --user -M slacker@ restart no-chatter
