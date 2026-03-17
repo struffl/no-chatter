@@ -49,7 +49,7 @@ use.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://git.glomp.ai/heni/no-chatter.git
+   git clone https://code.heni.lol/heni/no-chatter.git
    cd no-chatter
    ```
 
