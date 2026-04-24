@@ -1,0 +1,63 @@
+name: Docker-Image-Build
+
+on:
+  push:
+    branches:
+      - 'main'
+      - "dev/v[0-9]+.[0-9]+.[0-9]+" # For ex, "dev/v1.0.0"
+      - 'v*.*.*'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  bake:
+    runs-on: linux-x86_64
+    steps:
+
+      - name: Add packages
+        run: apt-get update && apt-get install -y sudo curl iptables
+      # DONT NOT REMOVE ABOVE, sudo curl iptables are required for some steps
+
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v6
+
+      - name: Setup Docker
+        uses: https://github.com/docker/setup-docker-action@v4
+
+      - name: Set up Docker Buildx
+        uses: https://github.com/docker/setup-buildx-action@v3
+
+      - name: Setup QEMU
+        uses: https://github.com/docker/setup-qemu-action@v3
+
+      - name: Login to DockerHub
+        uses: https://github.com/docker/login-action@v3
+        with:
+          registry: ${{ github.server_url }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.PACKAGE_WRITABLE_TOKEN }}
+      
+      - name: Get tag
+        id: get_tag
+        run: |
+          LOWERCASE_REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          SERVER_URL=$(echo "${{ github.server_url }}" | sed 's|https://||')
+          GITTAG="${SERVER_URL}/${LOWERCASE_REPO}:${{ github.ref_name }}"
+          LATESTTAG="${SERVER_URL}/${LOWERCASE_REPO}:latest"
+          echo "GITTAG=$GITTAG" >> $GITHUB_ENV
+          echo "LATESTTAG=$LATESTTAG" >> $GITHUB_ENV
+      # two tags to create, `latest` and `branch_name/tag_name`
+
+      - name: Build and push
+        uses: https://github.com/docker/bake-action@v6
+        with:
+          source: .
+          files: ./docker-bake.hcl
+          pull: true
+          push: true
+          set: |
+            *.tags=${{ env.LATESTTAG }}
+            *.tags=${{ env.GITTAG }}
+        env:
+          FORGEJO_ACCESS_TOKEN: ${{ secrets.PACKAGE_WRITABLE_TOKEN }}
