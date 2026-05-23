@@ -313,66 +313,59 @@ async function handleMoveToThread(
             );
             return;
         }
+
+        // Get or Create Thread
         let thread: ThreadChannel | null = targetMessage.thread;
         if (!thread) {
-            try {
-                thread = await targetMessage.startThread({
-                    name:
-                        `Discussion for ${targetMessage.author.displayName}'s post`,
-                    autoArchiveDuration: 60,
-                });
-                logger.info("Created thread:", thread);
-                // If the original message is from a system webhook it may be from PluralKit
-                if (targetMessage.author.bot && targetMessage.webhookId) {
-                    // Test if PluralKit knows this original author
-                    const metadata = await tryFetchPluralKitMetadataForMessage(
-                        targetMessage,
-                    );
-                    if (metadata) {
-                        const originalPoster = await client.users.fetch(
-                            metadata.sender,
-                        );
-                        await thread.members.add(originalPoster.id);
-                        logger.info(
-                            `Added original poster ${null} thread:`,
-                            thread,
-                        );
-                    }
-                } else {
-                    await thread.members.add(targetMessage.author.id);
-                }
-            } catch (error) {
-                logger.error("Error creating an initial thread:", error);
-                return;
-            }
+            thread = await targetMessage.startThread({
+                name:
+                    `Discussion for ${targetMessage.author.displayName}'s post`,
+                autoArchiveDuration: 60,
+            });
+            logger.info("Created thread:", thread);
         }
 
-        const proxiedMessageResult = await thread.send({
-            content: `${displayNameForThread} originally said:\n${content}`,
+        // Setup Proxy Webhook
+        const channelWebhooks = await channel.fetchWebhooks();
+        let proxyWebhook = channelWebhooks.find((w) => w.name === "Wisp-Proxy");
+        if (!proxyWebhook) {
+            proxyWebhook = await channel.createWebhook({
+                name: "Wisp-Proxy",
+                avatar: client.user?.displayAvatarURL(),
+            });
+        }
+
+        // Determine identity
+        let username = "";
+        let avatarURL = "";
+
+        if (
+            typeof displayNameForThread === "string" &&
+            displayNameForThread.includes("|")
+        ) {
+            const parts = displayNameForThread.split("|");
+            username = parts[0];
+            avatarURL = parts[1];
+        } else if (typeof displayNameForThread !== "string") {
+            username = displayNameForThread.displayName;
+            avatarURL = displayNameForThread.displayAvatarURL();
+        } else {
+            username = displayNameForThread;
+            avatarURL = "";
+        }
+
+        // Proxy the message
+        await proxyWebhook.send({
+            content: `${content}`,
+            username: username,
+            avatarURL: avatarURL || undefined,
+            threadId: thread.id,
             allowedMentions: { parse: ["users"] },
         });
 
-        logger.info("Proxied a message to a thread:", proxiedMessageResult);
-
-        try {
-            await thread.members.add(hostAuthor.id);
-            logger.info(
-                `Added ${hostAuthor.username} to the thread "${thread.name}".`,
-            );
-        } catch (error) {
-            logger.error("Error adding user to thread:", error);
-        }
-
-        await sendEphemeralMessage(
-            originalMessage,
-            `Your message in ${channel} has been moved to a discussion thread to keep the channel clean. You can find it here: ${thread}`,
-        ).catch(() => {
-            logger.error(
-                `Could not inform user ${originalMessage.author} in ${channel} with ephemeral message.`,
-            );
-        });
-
-        await originalMessage.delete().catch(() => {}); // Ignore bad deletes
+        await thread.members.add(hostAuthor.id);
+        await originalMessage.delete().catch(() => {});
+        return;
     } catch (error) {
         logger.error("handleMoveToThread failed:", error);
         await sendEphemeralMessage(
@@ -433,22 +426,19 @@ async function handleProxiedMessage(proxyMessage: Message) {
             const sender = await proxyMessage.guild.members.fetch(
                 originalAuthorId,
             );
+
+            // --- NEW: Identity for webhook ---
             let memberName = "";
+            let avatarUrl = "";
             if (pkData.member instanceof Member) {
                 memberName = pkData.member.display_name ?? pkData.member.name;
+                avatarUrl = pkData.member.avatar_url ?? "";
             } else {
                 memberName = pkData.member;
             }
-            let systemTag = "";
-            if (pkData.system instanceof System) {
-                systemTag = pkData.system.tag ?? pkData.system.name ?? "";
-            } else {
-                systemTag = pkData.system;
-            }
-            const displayName = `${memberName} ${systemTag} (host: ${sender})`;
 
             // Pop original message from queue and use it and others to gather metadata
-            const channel = proxyMessage.channel;
+            const channel = proxyMessage.channel as TextChannel;
             const content = proxyMessage.content;
             const key = `${originalAuthorId}-${proxyMessage.channel.id}`;
             const pending = pendingMessages.get(key);
@@ -456,12 +446,13 @@ async function handleProxiedMessage(proxyMessage: Message) {
                 const originalMessage = pending.originalMessage;
                 pendingMessages.delete(key);
 
-                // Perform move now that we have both original and PluralKit message interaction information
+                // Perform move using webhook proxying logic we already built into handleMoveToThread
+                // We'll pass the memberName/avatarUrl as part of a custom string to differentiate from User object
                 try {
                     await handleMoveToThread(
                         originalMessage,
                         content,
-                        displayName,
+                        `${memberName}|${avatarUrl}`,
                     );
                 } catch (error) {
                     await sendEphemeralMessage(
@@ -515,6 +506,7 @@ setInterval(async () => {
         // If it hasn't been removed by a PluralKit proxy interaction within the timeout, move it along
         if (now - timestamp > PENDING_MESSAGE_TIMEOUT_MS) {
             pendingMessages.delete(key);
+            // Pass User directly which triggers standard username/avatar path
             await handleMoveToThread(
                 originalMessage,
                 originalMessage.content,
